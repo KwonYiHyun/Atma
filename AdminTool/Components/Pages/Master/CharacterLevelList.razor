@@ -1,0 +1,363 @@
+﻿@page "/master/character_levels"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@using SharedData.Dto.Admin
+
+@inject GameServerClient _gameClient
+@inject IJSRuntime JS
+
+<style>
+    .table-scroll-container {
+        height: calc(100vh - 250px);
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+    }
+
+        .table-scroll-container thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+    .fab-btn {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        font-size: 30px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding-bottom: 5px;
+    }
+</style>
+
+<h3>캐릭터 레벨 성장 테이블 관리</h3>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <input type="text" class="form-control" placeholder="캐릭터 ID 검색 (예: 1001)"
+                   @bind="searchText" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <button class="btn btn-primary" @onclick="SearchLevels">검색</button>
+            <button class="btn btn-secondary" @onclick="ResetSearch">초기화</button>
+        </div>
+    </div>
+</div>
+
+@if (levelList == null)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="table-scroll-container bg-white">
+        <table class="table table-striped table-hover align-middle mb-0">
+            <thead class="table-dark sticky-top">
+                <tr>
+                    <th style="width: 80px;">PK ID</th>
+                    <th>캐릭터 ID</th>
+                    <th>레벨</th>
+                    <th>스탯 (ATK/DEF/HP/ST)</th>
+                    <th>필요 재화 (ID : 개수)</th>
+                    <th>기간</th>
+                    <th style="width: 100px;">관리</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in levelList)
+                {
+                    <tr>
+                        <td>@item.character_level_id</td>
+                        <td class="fw-bold text-primary">@item.character_id</td>
+                        <td class="fw-bold">Lv.@item.level</td>
+                        <td>
+                            <small>@item.atk / @item.def / @item.hp / @item.stance</small>
+                        </td>
+                        <td>
+                            <div style="font-size: 0.85rem;">
+                                @if (item.resource_item_id_1 > 0)
+                                {
+                                    <span>Item(@item.resource_item_id_1): @item.item_1_amount</span>
+                                    <br />
+                                }
+                                @if (item.resource_item_id_2 > 0)
+                                {
+                                    <span>Item(@item.resource_item_id_2): @item.item_2_amount</span>
+                                    <br />
+                                }
+                                @if (item.resource_item_id_3 > 0)
+                                {
+                                    <span>Item(@item.resource_item_id_3): @item.item_3_amount</span>
+                                }
+                            </div>
+                        </td>
+                        <td>
+                            <small>
+                                @item.start_date.ToString("yy-MM-dd") <br />
+                                @(item.end_date.HasValue? item.end_date.Value.ToString("yy-MM-dd") : "무기한")
+                            </small>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info text-white" @onclick="() => OpenEditModal(item)">
+                                상세
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<button class="btn btn-primary fab-btn" @onclick="OpenAddModal" title="신규 레벨 데이터 추가"> + </button>
+
+@if (showModal && editingLevel != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @(isNew ? "신규 레벨 데이터 등록" : $"레벨 데이터 수정 ({editingLevel.character_level_id})")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">기본 키 정보</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">PK ID (Auto)</label>
+                            <input type="number" class="form-control" @bind="editingLevel.character_level_id" disabled="@(!isNew)" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">캐릭터 ID</label>
+                            <input type="number" class="form-control" @bind="editingLevel.character_id" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">레벨 (Level)</label>
+                            <input type="number" class="form-control" @bind="editingLevel.level" />
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">성장 스탯 (Level Status)</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label class="form-label">공격력 (ATK)</label>
+                            <input type="number" class="form-control" @bind="editingLevel.atk" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">방어력 (DEF)</label>
+                            <input type="number" class="form-control" @bind="editingLevel.def" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">체력 (HP)</label>
+                            <input type="number" class="form-control" @bind="editingLevel.hp" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">자세 (Stance)</label>
+                            <input type="number" class="form-control" @bind="editingLevel.stance" />
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">필요 재료 (Resources)</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">재료 아이템 ID 1</label>
+                            <input type="number" class="form-control" @bind="editingLevel.resource_item_id_1" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">필요 수량 1</label>
+                            <input type="number" class="form-control" @bind="editingLevel.item_1_amount" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">재료 아이템 ID 2</label>
+                            <input type="number" class="form-control" @bind="editingLevel.resource_item_id_2" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">필요 수량 2</label>
+                            <input type="number" class="form-control" @bind="editingLevel.item_2_amount" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">재료 아이템 ID 3</label>
+                            <input type="number" class="form-control" @bind="editingLevel.resource_item_id_3" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">필요 수량 3</label>
+                            <input type="number" class="form-control" @bind="editingLevel.item_3_amount" />
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">유효 기간</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">시작일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingLevel.start_date" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">종료일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingLevel.end_date" />
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">취소</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveLevel">
+                        @(isNew ? "신규 등록" : "수정 저장")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MasterCharacterLevelDto> levelList;
+    private string searchText = "";
+
+    private bool showModal = false;
+    private bool isNew = false;
+    private MasterCharacterLevelDto editingLevel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        levelList = await _gameClient.getCharacterLevels();
+        if (!string.IsNullOrEmpty(searchText))
+        {
+            await SearchLevels();
+        }
+    }
+
+    private async Task SearchLevels()
+    {
+        if (levelList == null || levelList.Count == 0)
+        {
+
+        }
+
+        var query = levelList.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            if (int.TryParse(searchText, out int searchId))
+            {
+                query = query.Where(l => l.character_id == searchId);
+            }
+        }
+
+        levelList = query.OrderBy(l => l.character_id).ThenBy(l => l.level).ToList();
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchLevels();
+        }
+    }
+
+    private async Task ResetSearch()
+    {
+        searchText = "";
+        await LoadData();
+    }
+
+    private void OpenAddModal()
+    {
+        isNew = true;
+        editingLevel = new MasterCharacterLevelDto
+        {
+            character_level_id = 0,
+            character_id = 0,
+            level = 1,
+            start_date = DateTime.Now,
+            end_date = null,
+            insert_date = DateTime.Now,
+            update_date = DateTime.Now
+        };
+        showModal = true;
+    }
+
+    private void OpenEditModal(MasterCharacterLevelDto item)
+    {
+        isNew = false;
+        editingLevel = new MasterCharacterLevelDto
+        {
+            character_level_id = item.character_level_id,
+            character_id = item.character_id,
+            level = item.level,
+            atk = item.atk,
+            def = item.def,
+            hp = item.hp,
+            stance = item.stance,
+            resource_item_id_1 = item.resource_item_id_1,
+            resource_item_id_2 = item.resource_item_id_2,
+            resource_item_id_3 = item.resource_item_id_3,
+            item_1_amount = item.item_1_amount,
+            item_2_amount = item.item_2_amount,
+            item_3_amount = item.item_3_amount,
+            start_date = item.start_date,
+            end_date = item.end_date,
+            insert_date = item.insert_date,
+            update_date = item.update_date
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingLevel = null;
+    }
+
+    private async Task SaveLevel()
+    {
+        try
+        {
+            (bool success, string message) result;
+
+            if (isNew)
+            {
+                result = await _gameClient.addCharacterLevelAsync(editingLevel);
+            }
+            else
+            {
+                result = await _gameClient.editCharacterLevelAsync(editingLevel);
+            }
+
+            if (result.success)
+            {
+                await JS.InvokeVoidAsync("alert", result.message);
+                CloseModal();
+                await LoadData();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", $"저장 실패: {result.message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"오류 발생: {ex.Message}");
+        }
+    }
+}

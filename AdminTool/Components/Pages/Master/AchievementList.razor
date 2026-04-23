@@ -1,0 +1,393 @@
+﻿@page "/master/achievements"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@using SharedData.Dto.Admin
+@using SharedData.Type
+
+@inject GameServerClient _gameClient
+@inject IJSRuntime JS
+
+<style>
+    .table-scroll-container {
+        height: calc(100vh - 250px);
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+    }
+    .table-scroll-container thead th {
+        position: sticky; top: 0; z-index: 1;
+    }
+    .fab-btn {
+        position: fixed; bottom: 30px; right: 30px;
+        width: 60px; height: 60px; border-radius: 50%;
+        font-size: 30px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        z-index: 1000; display: flex; align-items: center; justify-content: center; padding-bottom: 5px;
+    }
+    .desc-text {
+        font-size: 0.85rem; color: #6c757d;
+    }
+</style>
+
+<h3>업적(Achievement) 마스터 관리</h3>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <input type="text" class="form-control" placeholder="ID 또는 업적 타이틀 검색"
+                   @bind="searchText" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <button class="btn btn-primary" @onclick="SearchAchievements">검색</button>
+            <button class="btn btn-secondary" @onclick="ResetSearch">초기화</button>
+        </div>
+    </div>
+</div>
+
+@if (achievementList == null)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="table-scroll-container bg-white">
+        <table class="table table-striped table-hover align-middle mb-0">
+            <thead class="table-dark sticky-top">
+                <tr>
+                    <th style="width: 80px;">ID</th>
+                    <th style="width: 60px;">순서</th>
+                    <th>카테고리</th>
+                    <th>업적 타이틀 / 설명</th>
+                    <th>달성 조건 (Type / Params)</th>
+                    <th>지급 보상 (Reward IDs)</th>
+                    <th>기간</th>
+                    <th style="width: 80px;">관리</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in achievementList)
+                {
+                    <tr>
+                        <td>@item.achievement_id</td>
+                        <td>@item.show_order</td>
+                        <td>
+                            @switch ((AchievementCategory)item.achievement_category_id)
+                            {
+                                case AchievementCategory.DAILY: <span class="badge bg-success">일일 미션</span> break;
+                                case AchievementCategory.WEEKLY: <span class="badge bg-primary">주간 미션</span> break;
+                                case AchievementCategory.SPECIAL: <span class="badge bg-warning text-dark">특별/업적</span> break;
+                                default: <span class="badge bg-secondary">기타(@item.achievement_category_id)</span> break;
+                            }
+                        </td>
+                        <td>
+                            <div class="fw-bold">@item.achievement_title</div>
+                            <div class="desc-text text-truncate" style="max-width: 250px;">@item.achievement_description</div>
+                        </td>
+                        <td>
+                            <div>
+                                @switch ((AchievementType)item.achievement_type)
+                                {
+                                    case AchievementType.STORY_CLEAR: <span class="badge bg-info text-dark">스토리 클리어</span> break;
+                                    case AchievementType.LOGIN_COUNT: <span class="badge bg-info text-dark">로그인 횟수</span> break;
+                                    case AchievementType.STAGE_CLEAR: <span class="badge bg-info text-dark">스테이지 클리어</span> break;
+                                    case AchievementType.GACHA_PLAY: <span class="badge bg-info text-dark">가챠 진행</span> break;
+                                    default: <span class="badge bg-light text-dark">Type: @item.achievement_type</span> break;
+                                }
+                            </div>
+                            <small class="text-muted">
+                                P1: @item.achievement_param_1 | P2: @item.achievement_param_2 | P3: @item.achievement_param_3
+                            </small>
+                        </td>
+                        <td>
+                            <small>
+                                1. ID: @item.reward_id_1 <br/>
+                                @if (item.reward_id_2.HasValue && item.reward_id_2 > 0)
+                                {
+                                    <span>2. ID: @item.reward_id_2</span> <br/>
+                                }
+                                @if (item.reward_id_3.HasValue && item.reward_id_3 > 0)
+                                {
+                                    <span>3. ID: @item.reward_id_3</span>
+                                }
+                            </small>
+                        </td>
+                        <td>
+                            <small>
+                                @item.start_date.ToString("yy-MM-dd") <br />
+                                @(item.end_date.HasValue ? item.end_date.Value.ToString("yy-MM-dd") : "무기한")
+                            </small>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info text-white" @onclick="() => OpenEditModal(item)">
+                                상세
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<button class="btn btn-primary fab-btn" @onclick="OpenAddModal" title="신규 업적 추가"> + </button>
+
+@if (showModal && editingAchievement != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @(isNew ? "신규 업적 등록" : $"업적 수정 ({editingAchievement.achievement_id})")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">업적 기본 정보</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">ID (PK)</label>
+                            <input type="number" class="form-control" @bind="editingAchievement.achievement_id" disabled="@(!isNew)" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">표시 순서</label>
+                            <input type="number" class="form-control" @bind="editingAchievement.show_order" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-success">카테고리 (Category)</label>
+                            <select class="form-select" @bind="editingAchievement.achievement_category_id">
+                                @foreach (AchievementCategory cat in Enum.GetValues(typeof(AchievementCategory)))
+                                {
+                                    <option value="@((int)cat)">@cat.ToString()</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">업적 타이틀 (Title)</label>
+                            <input type="text" class="form-control" @bind="editingAchievement.achievement_title" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">업적 상세 설명 (Description)</label>
+                            <textarea class="form-control" rows="2" @bind="editingAchievement.achievement_description"></textarea>
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">달성 조건 (Clear Condition)</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold text-info">달성 타입 (Condition Type)</label>
+                            <select class="form-select border-info" @bind="editingAchievement.achievement_type">
+                                @foreach (AchievementType type in Enum.GetValues(typeof(AchievementType)))
+                                {
+                                    <option value="@((int)type)">@type.ToString()</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">파라미터 1</label>
+                            <input type="number" class="form-control" @bind="editingAchievement.achievement_param_1" />
+                            <div class="form-text">예: 목표 스테이지 ID 등</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">파라미터 2</label>
+                            <input type="number" class="form-control" @bind="editingAchievement.achievement_param_2" />
+                            <div class="form-text">예: 달성 요구 횟수 등</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">파라미터 3</label>
+                            <input type="number" class="form-control" @bind="editingAchievement.achievement_param_3" />
+                            <div class="form-text">여분 파라미터</div>
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">클리어 보상 (Reward IDs)</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">보상 1 (필수)</label>
+                            <input type="number" class="form-control" @bind="editingAchievement.reward_id_1" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">보상 2 (선택)</label>
+                            <input type="number" class="form-control" @bind="editingAchievement.reward_id_2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">보상 3 (선택)</label>
+                            <input type="number" class="form-control" @bind="editingAchievement.reward_id_3" />
+                        </div>
+                        <div class="col-12 form-text">
+                            MasterReward 테이블의 ID를 입력하세요. (없으면 0 또는 비움)
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">유효 기간</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">시작일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingAchievement.start_date" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">종료일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingAchievement.end_date" />
+                            <div class="form-text">상시 업적인 경우 비워두세요.</div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">취소</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveAchievement">
+                        @(isNew ? "신규 등록" : "수정 저장")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MasterAchievementDto> achievementList;
+    private string searchText = "";
+
+    private bool showModal = false;
+    private bool isNew = false;
+    private MasterAchievementDto editingAchievement;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        achievementList = await _gameClient.getAchievements();
+        if (!string.IsNullOrEmpty(searchText))
+        {
+            await SearchAchievements();
+        }
+    }
+
+    private async Task SearchAchievements()
+    {
+        if (achievementList == null || achievementList.Count == 0) await LoadData();
+
+        var query = achievementList.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            if (int.TryParse(searchText, out int searchId))
+            {
+                query = query.Where(a => a.achievement_id == searchId);
+            }
+            else
+            {
+                query = query.Where(a => a.achievement_title.Contains(searchText));
+            }
+        }
+
+        achievementList = query
+            .OrderBy(a => a.achievement_category_id)
+            .ThenBy(a => a.show_order)
+            .ThenBy(a => a.achievement_id)
+            .ToList();
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchAchievements();
+    }
+
+    private async Task ResetSearch()
+    {
+        searchText = "";
+        await LoadData();
+    }
+
+    private void OpenAddModal()
+    {
+        isNew = true;
+        editingAchievement = new MasterAchievementDto
+        {
+            achievement_id = 0,
+            show_order = 1,
+            achievement_category_id = (int)AchievementCategory.DAILY,
+            achievement_title = "",
+            achievement_description = "",
+            achievement_type = (int)AchievementType.GACHA_PLAY,
+            achievement_param_1 = 0,
+            achievement_param_2 = 0,
+            achievement_param_3 = 0,
+            reward_id_1 = 0,
+            start_date = DateTime.Now,
+            end_date = null,
+            insert_date = DateTime.Now,
+            update_date = DateTime.Now
+        };
+        showModal = true;
+    }
+
+    private void OpenEditModal(MasterAchievementDto item)
+    {
+        isNew = false;
+        editingAchievement = new MasterAchievementDto
+        {
+            achievement_id = item.achievement_id,
+            show_order = item.show_order,
+            achievement_category_id = item.achievement_category_id,
+            achievement_title = item.achievement_title,
+            achievement_type = item.achievement_type,
+            achievement_param_1 = item.achievement_param_1,
+            achievement_param_2 = item.achievement_param_2,
+            achievement_param_3 = item.achievement_param_3,
+            achievement_description = item.achievement_description,
+            reward_id_1 = item.reward_id_1,
+            reward_id_2 = item.reward_id_2,
+            reward_id_3 = item.reward_id_3,
+            start_date = item.start_date,
+            end_date = item.end_date,
+            insert_date = item.insert_date,
+            update_date = item.update_date
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingAchievement = null;
+    }
+
+    private async Task SaveAchievement()
+    {
+        try
+        {
+            (bool success, string message) result;
+
+            if (isNew)
+            {
+                result = await _gameClient.addAchievementAsync(editingAchievement);
+            }
+            else
+            {
+                result = await _gameClient.editAchievementAsync(editingAchievement);
+            }
+
+            if (result.success)
+            {
+                await JS.InvokeVoidAsync("alert", result.message);
+                CloseModal();
+                await LoadData();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", $"저장 실패: {result.message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"오류 발생: {ex.Message}");
+        }
+    }
+}

@@ -1,0 +1,100 @@
+# version: '3.8'
+
+services:
+  # MSSQL
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: empen_mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=empen@1234
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlvolume:/var/opt/mssql
+    restart: always
+
+  # Redis
+  redis:
+    image: redis:alpine
+    container_name: empen_redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # Login Server
+  loginserver:
+    build:
+      context: ../
+      dockerfile: Docker/LoginServer.Dockerfile
+    container_name: empen_loginserver
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8885
+      - ConnectionStrings__AccountConnection=Server=sqlserver;Database=account;User Id=sa;Password=empen@1234;TrustServerCertificate=True;
+      - ConnectionStrings__RedisConnection=redis:6379
+      - ConnectionStrings__GameServer=http://gameserver:8888
+    depends_on:
+      - sqlserver
+      - redis
+    restart: always
+
+  # Game Server
+  gameserver:
+    build:
+      context: ../
+      dockerfile: Docker/Empen.Dockerfile
+    container_name: empen_gameserver
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8888
+      - ConnectionStrings__MasterConnection=Server=sqlserver;Database=empen;User Id=sa;Password=empen@1234;TrustServerCertificate=True;
+      - ConnectionStrings__PersonConnection=Server=sqlserver;Database=person;User Id=sa;Password=empen@1234;TrustServerCertificate=True;
+      - ConnectionStrings__RedisConnection=redis:6379
+      - Jwt__Key=EmpenServerJwtKeyabcdefghijklmnopqrstuvwxyz
+      - Jwt__Issuer=EmpenServer
+      - Jwt__Audience=EmpenClient
+    depends_on:
+      - sqlserver
+      - redis
+    restart: always
+
+  # Blazor
+  admintool:
+    build:
+      context: ../
+      dockerfile: Docker/AdminTool.Dockerfile
+    container_name: empen_admintool
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8880
+      - Logging__LogLevel__Default=Debug
+      - Logging__LogLevel__Microsoft.AspNetCore=Debug
+      - ConnectionStrings__GameServer=http://gameserver:8888
+    volumes:
+      - admintool_keys:/root/.aspnet/DataProtection-Keys
+    depends_on:
+      - sqlserver
+      - gameserver
+    restart: always
+
+  # Nginx
+  nginx:
+    image: nginx:alpine
+    container_name: empen_nginx
+    ports:
+      - "8888:8888"   # Nginx -> Game Server
+      - "8885:8885"   # Nginx -> Login Server
+      - "8880:8880"   # Nginx -> Blazor
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - loginserver
+      - gameserver
+      - admintool
+    restart: always
+
+# DB Volume
+volumes:
+  sqlvolume:
+  admintool_keys:

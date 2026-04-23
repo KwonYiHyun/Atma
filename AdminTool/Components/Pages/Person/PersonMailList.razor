@@ -1,0 +1,267 @@
+﻿@page "/person/mail"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@using SharedData.Dto.Admin
+
+@inject GameServerClient _gameClient
+@inject IJSRuntime JS
+
+<style>
+    .table-scroll-container {
+        height: calc(100vh - 200px);
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+    }
+
+        .table-scroll-container thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+    .desc-preview {
+        font-size: 0.85rem;
+        color: #6c757d;
+        max-width: 250px;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+</style>
+
+<h3>유저 우편함(Person Mail) 관리</h3>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <span class="input-group-text bg-light fw-bold">Person ID</span>
+            <input type="number" class="form-control" placeholder="조회할 유저의 ID 입력"
+                   @bind="searchPersonId" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <button class="btn btn-primary" @onclick="SearchMails">우편함 조회</button>
+        </div>
+    </div>
+</div>
+
+@if (mailList == null)
+{
+    <div class="alert alert-info">유저 ID를 입력하고 조회 버튼을 눌러주세요.</div>
+}
+else if (mailList.Count == 0)
+{
+    <div class="alert alert-warning">해당 유저의 우편함이 비어있거나, 유저를 찾을 수 없습니다.</div>
+}
+else
+{
+    <div class="table-scroll-container bg-white">
+        <table class="table table-striped table-hover align-middle mb-0">
+            <thead class="table-dark sticky-top">
+                <tr>
+                    <th style="width: 80px;">Mail ID</th>
+                    <th>상태</th>
+                    <th>제목 / 내용</th>
+                    <th>첨부 보상</th>
+                    <th>만료일</th>
+                    <th style="width: 140px;">관리</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var mail in mailList)
+                {
+                    <tr>
+                        <td>@mail.person_mail_id</td>
+                        <td>
+                            @if (mail.is_receive)
+                            {
+                                <span class="badge bg-secondary">수령 완료</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success">미수령</span>
+                            }
+                        </td>
+                        <td>
+                            <div class="fw-bold">@mail.title</div>
+                            <div class="desc-preview">@mail.description</div>
+                        </td>
+                        <td>
+                            <small>
+                                @if (mail.reward_id_1 > 0)
+                                {
+                                    <span>🎁 @mail.reward_id_1 (@mail.reward_id_1_amount 개)</span>
+                                    <br />
+                                }
+                                @if (mail.reward_id_2.HasValue && mail.reward_id_2 > 0)
+                                {
+                                    <span>🎁 @mail.reward_id_2 (@mail.reward_id_2_amount 개)</span>
+                                    <br />
+                                }
+                                @if (mail.reward_id_3.HasValue && mail.reward_id_3 > 0)
+                                {
+                                    <span>🎁 @mail.reward_id_3 (@mail.reward_id_3_amount 개)</span>
+                                }
+                            </small>
+                        </td>
+                        <td>
+                            <small class="@((mail.expire_date.HasValue && mail.expire_date.Value < DateTime.Now) ? "text-danger fw-bold" : "")">
+                                @(mail.expire_date.HasValue? mail.expire_date.Value.ToString("yy-MM-dd HH:mm") : "무기한")
+                                @if (mail.expire_date.HasValue && mail.expire_date.Value < DateTime.Now)
+                                {
+                                    <br />
+                        
+                                    <span>(만료됨)</span>
+                                }
+                            </small>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info text-white" @onclick="() => OpenEditModal(mail)">수정</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(mail.person_mail_id)">삭제</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (showModal && editingMail != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">우편 데이터 수정 (@editingMail.person_mail_id)</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">수령 상태 강제 변경</label>
+                            <select class="form-select" @bind="editingMail.is_receive">
+                                <option value="false">미수령 (다시 받을 수 있음)</option>
+                                <option value="true">수령 완료 (받을 수 없음)</option>
+                            </select>
+                            <div class="form-text text-danger">※ 미수령으로 돌리면 유저가 보상을 중복으로 받을 수 있습니다.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">만료일 연장/수정</label>
+                            <input type="datetime-local" class="form-control" @bind="editingMail.expire_date" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">제목</label>
+                            <input type="text" class="form-control" @bind="editingMail.title" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">내용</label>
+                            <textarea class="form-control" rows="3" @bind="editingMail.description"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">취소</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveMail">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int? searchPersonId;
+    private List<PersonMailDto>? mailList;
+
+    private bool showModal = false;
+    private PersonMailDto? editingMail;
+
+    private async Task SearchMails()
+    {
+        if (searchPersonId == null || searchPersonId <= 0)
+        {
+            await JS.InvokeVoidAsync("alert", "유효한 Person ID를 입력해주세요.");
+            return;
+        }
+
+        mailList = await _gameClient.getPersonMailsAsync(searchPersonId.Value);
+
+        if (mailList != null)
+        {
+            mailList = mailList.OrderByDescending(m => m.insert_date).ToList();
+        }
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchMails();
+    }
+
+    private void OpenEditModal(PersonMailDto item)
+    {
+        editingMail = new PersonMailDto
+        {
+            person_mail_id = item.person_mail_id,
+            person_id = item.person_id,
+            title = item.title,
+            description = item.description,
+            reward_id_1 = item.reward_id_1,
+            reward_id_1_amount = item.reward_id_1_amount,
+            reward_id_2 = item.reward_id_2,
+            reward_id_2_amount = item.reward_id_2_amount,
+            reward_id_3 = item.reward_id_3,
+            reward_id_3_amount = item.reward_id_3_amount,
+            is_receive = item.is_receive,
+            expire_date = item.expire_date,
+            insert_date = item.insert_date,
+            update_date = item.update_date
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingMail = null;
+    }
+
+    private async Task SaveMail()
+    {
+        if (editingMail == null) return;
+
+        try
+        {
+            var result = await _gameClient.editPersonMailAsync(editingMail);
+            if (result.Item1)
+            {
+                await JS.InvokeVoidAsync("alert", "수정되었습니다.");
+                CloseModal();
+                await SearchMails();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", $"수정 실패: {result.Item2}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"오류 발생: {ex.Message}");
+        }
+    }
+
+    private async Task ConfirmDelete(int mailId)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"정말 ID {mailId} 우편을 삭제(회수)하시겠습니까?\n이 작업은 복구할 수 없습니다.");
+        if (confirmed)
+        {
+            var result = await _gameClient.deletePersonMailAsync(mailId);
+            if (result.Item1)
+            {
+                await JS.InvokeVoidAsync("alert", "우편이 삭제되었습니다.");
+                await SearchMails();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", $"삭제 실패: {result.Item2}");
+            }
+        }
+    }
+}

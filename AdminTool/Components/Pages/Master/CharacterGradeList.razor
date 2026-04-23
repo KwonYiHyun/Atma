@@ -1,0 +1,355 @@
+﻿@page "/master/character_grades"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@using SharedData.Dto.Admin
+
+@inject GameServerClient _gameClient
+@inject IJSRuntime JS
+
+<style>
+    .table-scroll-container {
+        height: calc(100vh - 250px);
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+    }
+
+        .table-scroll-container thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+    .fab-btn {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        font-size: 30px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding-bottom: 5px;
+    }
+
+    .star-rating {
+        color: #ffc107;
+        font-size: 1.1rem;
+    }
+</style>
+
+<h3>캐릭터 등급(성급) 성장 테이블 관리</h3>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <input type="text" class="form-control" placeholder="캐릭터 ID 검색 (예: 1001)"
+                   @bind="searchText" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <button class="btn btn-primary" @onclick="SearchGrades">검색</button>
+            <button class="btn btn-secondary" @onclick="ResetSearch">초기화</button>
+        </div>
+    </div>
+</div>
+
+@if (gradeList == null)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="table-scroll-container bg-white">
+        <table class="table table-striped table-hover align-middle mb-0">
+            <thead class="table-dark sticky-top">
+                <tr>
+                    <th style="width: 80px;">PK ID</th>
+                    <th>캐릭터 ID</th>
+                    <th>등급 (Grade)</th>
+                    <th>치명타 (Rate/Dmg)</th>
+                    <th>승급 비용 (조각/토큰)</th>
+                    <th>기간</th>
+                    <th style="width: 100px;">관리</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in gradeList)
+                {
+                    <tr>
+                        <td>@item.character_grade_id</td>
+                        <td class="fw-bold text-primary">@item.character_id</td>
+                        <td>
+                            <span class="star-rating">
+                                @for (int i = 0; i < item.grade; i++)
+                                {
+                                    <span>★</span>
+                                }
+                            </span>
+                            <small class="text-muted ms-1">(@item.grade)</small>
+                        </td>
+                        <td>
+                            <small>
+                                <span>Rate: @item.critical_rate%</span> <br />
+                                <span>Dmg: @item.critical_damage%</span>
+                            </small>
+                        </td>
+                        <td>
+                            @if (item.require_count > 0 || item.price_token > 0)
+                            {
+                                <small>
+                                    @if (item.require_count > 0)
+                                    {
+                                        <span>🧩 조각: @item.require_count</span>
+                                        <br />
+                                    }
+                                    @if (item.price_token > 0)
+                                    {
+                                        <span>💰 토큰: @item.price_token</span>
+                                    }
+                                </small>
+                            }
+                            else
+                            {
+                                <span class="badge bg-light text-dark">무료</span>
+                            }
+                        </td>
+                        <td>
+                            <small>
+                                @item.start_date.ToString("yy-MM-dd") <br />
+                                @(item.end_date.HasValue? item.end_date.Value.ToString("yy-MM-dd") : "무기한")
+                            </small>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info text-white" @onclick="() => OpenEditModal(item)">
+                                상세
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<button class="btn btn-primary fab-btn" @onclick="OpenAddModal" title="신규 등급 데이터 추가"> + </button>
+
+@if (showModal && editingGrade != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @(isNew ? "신규 등급 데이터 등록" : $"등급 데이터 수정 ({editingGrade.character_grade_id})")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">기본 키 정보</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">PK ID (Auto)</label>
+                            <input type="number" class="form-control" @bind="editingGrade.character_grade_id" disabled="@(!isNew)" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">캐릭터 ID</label>
+                            <input type="number" class="form-control" @bind="editingGrade.character_id" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">등급 (Star Grade)</label>
+                            <select class="form-select" @bind="editingGrade.grade">
+                                @for (int i = 1; i <= 6; i++)
+                                {
+                                    <option value="@i">@i 성</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">등급별 보너스 스탯</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">치명타 확률 (Crit Rate %)</label>
+                            <input type="number" class="form-control" @bind="editingGrade.critical_rate" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">치명타 피해 (Crit Dmg %)</label>
+                            <input type="number" class="form-control" @bind="editingGrade.critical_damage" />
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">승급 필요 재화 (Upgrade Cost)</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">필요 조각 개수 (Require Count)</label>
+                            <input type="number" class="form-control" @bind="editingGrade.require_count" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">필요 토큰 비용 (Price Token)</label>
+                            <input type="number" class="form-control" @bind="editingGrade.price_token" />
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">유효 기간</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">시작일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingGrade.start_date" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">종료일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingGrade.end_date" />
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">취소</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveGrade">
+                        @(isNew ? "신규 등록" : "수정 저장")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MasterCharacterGradeDto> gradeList;
+    private string searchText = "";
+
+    private bool showModal = false;
+    private bool isNew = false;
+    private MasterCharacterGradeDto editingGrade;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        gradeList = await _gameClient.getCharacterGrades();
+        if (!string.IsNullOrEmpty(searchText))
+        {
+            await SearchGrades();
+        }
+    }
+
+    private async Task SearchGrades()
+    {
+        if (gradeList == null || gradeList.Count == 0)
+        {
+            await LoadData();
+        }
+
+        var query = gradeList.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            if (int.TryParse(searchText, out int searchId))
+            {
+                query = query.Where(g => g.character_id == searchId);
+            }
+        }
+
+        gradeList = query.OrderBy(g => g.character_id).ThenBy(g => g.grade).ToList();
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchGrades();
+    }
+
+    private async Task ResetSearch()
+    {
+        searchText = "";
+        await LoadData();
+    }
+
+    private void OpenAddModal()
+    {
+        isNew = true;
+        editingGrade = new MasterCharacterGradeDto
+        {
+            character_grade_id = 0,
+            character_id = 0,
+            grade = 3,
+            critical_rate = 0,
+            critical_damage = 0,
+            require_count = 0,
+            price_token = 0,
+            start_date = DateTime.Now,
+            end_date = null,
+            insert_date = DateTime.Now,
+            update_date = DateTime.Now
+        };
+        showModal = true;
+    }
+
+    private void OpenEditModal(MasterCharacterGradeDto item)
+    {
+        isNew = false;
+        editingGrade = new MasterCharacterGradeDto
+        {
+            character_grade_id = item.character_grade_id,
+            character_id = item.character_id,
+            grade = item.grade,
+            critical_rate = item.critical_rate,
+            critical_damage = item.critical_damage,
+            require_count = item.require_count,
+            price_token = item.price_token,
+            start_date = item.start_date,
+            end_date = item.end_date,
+            insert_date = item.insert_date,
+            update_date = item.update_date
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingGrade = null;
+    }
+
+    private async Task SaveGrade()
+    {
+        try
+        {
+            (bool success, string message) result;
+
+            if (isNew)
+            {
+                result = await _gameClient.addCharacterGradeAsync(editingGrade);
+            }
+            else
+            {
+                result = await _gameClient.editCharacterGradeAsync(editingGrade);
+            }
+
+            if (result.success)
+            {
+                await JS.InvokeVoidAsync("alert", result.message);
+                CloseModal();
+                await LoadData();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", $"저장 실패: {result.message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"오류 발생: {ex.Message}");
+        }
+    }
+}

@@ -1,0 +1,78 @@
+﻿@page "/master"
+
+<style>
+    .menu-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+        .menu-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+    .list-group-item-action {
+        font-weight: 500;
+        color: #495057;
+    }
+
+        .list-group-item-action:hover {
+            background-color: #f8f9fa;
+            color: #0d6efd;
+        }
+</style>
+
+<div class="container-fluid mt-3">
+    <h3 class="mb-4"><span class="oi oi-layers text-primary"></span> 마스터 데이터 관리</h3>
+    <p class="text-muted mb-4">관리할 마스터 데이터 카테고리를 선택하세요.</p>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+
+        <div class="col">
+            <div class="card h-100 border-primary menu-card">
+                <div class="card-header bg-primary text-white fw-bold">
+                    <span class="oi oi-people"></span> 캐릭터 & 아이템
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="master/items" class="list-group-item list-group-item-action">아이템 관리</a>
+                    <a href="master/characters" class="list-group-item list-group-item-action">캐릭터 관리</a>
+                    <a href="master/character_levels" class="list-group-item list-group-item-action">캐릭터 레벨 관리</a>
+                    <a href="master/character_grades" class="list-group-item list-group-item-action">캐릭터 등급 관리</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card h-100 border-success menu-card">
+                <div class="card-header bg-success text-white fw-bold">
+                    <span class="oi oi-cart"></span> 상점 & 가챠 (BM)
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="master/gachas" class="list-group-item list-group-item-action">가챠 관리</a>
+                    <a href="master/products" class="list-group-item list-group-item-action">프리즘 상품 관리</a>
+                    <a href="master/product_sets" class="list-group-item list-group-item-action">(현금 → 프리즘) 패키지</a>
+                    <a href="master/product_set_prisms" class="list-group-item list-group-item-action">(프리즘 → 필름) 상품</a>
+                    <a href="master/product_set_tokens" class="list-group-item list-group-item-action">(토큰 → 아이템) 상점</a>
+                    <a href="master/product_set_pieces" class="list-group-item list-group-item-action">(조각 → 캐릭터) 교환소</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card h-100 border-warning menu-card">
+                <div class="card-header bg-warning text-dark fw-bold">
+                    <span class="oi oi-star"></span> 운영 & 이벤트
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="master/banners" class="list-group-item list-group-item-action">배너 관리</a>
+                    <a href="master/notices" class="list-group-item list-group-item-action">공지사항 관리</a>
+                    <a href="master/rewards" class="list-group-item list-group-item-action">리워드 관리</a>
+                    <a href="master/achievements" class="list-group-item list-group-item-action">업적 관리</a>
+                    <a href="master/loginbonuses" class="list-group-item list-group-item-action">로그인 보너스 관리</a>
+                    <a href="master/loginbonusdays" class="list-group-item list-group-item-action">로그인 보너스 보상 관리</a>
+                    <a href="master/mails" class="list-group-item list-group-item-action">우편 템플릿 관리</a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>

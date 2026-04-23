@@ -1,0 +1,124 @@
+﻿@page
+@model Empen.Pages.Notice.ReadModel
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>@Model.Notice.notice_title</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        .top-nav {
+            padding: 12px;
+            background: #1e1e1e;
+            border-bottom: 1px solid #333;
+            position: sticky;
+            top: 0;
+        }
+
+        .back-link {
+            color: #aaa;
+            text-decoration: none;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        .banner-img {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .header-area {
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .main-title {
+            font-size: 18px;
+            font-weight: bold;
+            display: block;
+            color: white;
+            margin-bottom: 5px;
+        }
+
+        .sub-date {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .content-body {
+            font-size: 15px;
+            color: #ccc;
+            word-break: break-all;
+        }
+
+            .content-body img {
+                max-width: 100%;
+                height: auto;
+                margin: 10px 0;
+            }
+
+        /* 외부 링크 */
+        .ext-link-btn {
+            display: block;
+            margin-top: 30px;
+            padding: 12px;
+            background-color: #3b82f6;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-nav">
+        <a href="/Notice/Index" class="back-link">◀ 목록으로</a>
+    </div>
+
+    <div class="container">
+        @if (!string.IsNullOrEmpty(Model.Notice.notice_banner_image))
+        {
+            <img src="@Model.Notice.notice_banner_image" class="banner-img" alt="banner" />
+        }
+
+        <div class="header-area">
+            <span class="main-title">@Model.Notice.notice_title</span>
+            <span class="sub-date">@Model.Notice.start_date.ToString("yyyy.MM.dd HH:mm")</span>
+        </div>
+
+        <div class="content-body">
+            @Html.Raw(Model.Notice.notice_content)
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.Notice.notice_link))
+        {
+            <a href="@Model.Notice.notice_link" target="_blank" class="ext-link-btn">
+                자세히 보기 (링크)
+            </a>
+        }
+    </div>
+
+</body>
+</html>
