@@ -1,0 +1,121 @@
+﻿@page "/admin/server-time"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@inject GameServerClient _gameClient
+@inject IJSRuntime JS
+
+<PageTitle>서버 시간 관리</PageTitle>
+
+<div class="container mt-4" style="max-width: 900px;">
+    <h2 class="mb-4">⏳ 서버 시간 조작</h2>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white">현재 서버 상태</div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="text-muted small">현실 시간 (Real Time)</label>
+                        <div class="fs-5 font-monospace">@_realTime.ToString("yyyy-MM-dd HH:mm:ss")</div>
+                    </div>
+                    <hr />
+                    <div class="mb-2">
+                        <label class="text-muted small">서버 적용 시간 (Virtual Time)</label>
+                        <div class="fs-3 fw-bold font-monospace @(_isModified ? "text-danger" : "text-success")">
+                            @_virtualTime.ToString("yyyy-MM-dd HH:mm:ss")
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        @if (_isModified)
+                        {
+                            <span class="badge bg-danger">⚠️ 조작됨 (Offset: @_currentOffset.TotalHours.ToString("F1")시간)</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">✅ 정상 (현실과 동일)</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">시간 변경하기</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">테스트할 미래/과거 시간 입력</label>
+                        <input type="datetime-local" class="form-control" @bind="_targetTime" step="1" />
+                        <div class="form-text">적용 시 모든 게임 서버의 시간이 즉시 변경됩니다.</div>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" @onclick="UpdateServerTime">⏱ 시간 변경 적용</button>
+                        <button class="btn btn-secondary" @onclick="ResetServerTime">🔄 현실 시간으로 초기화</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Timer? _timer;
+    private DateTime _realTime = DateTime.Now;
+    private DateTime _virtualTime = DateTime.Now;
+    private DateTime _targetTime = DateTime.Now;
+    private TimeSpan _currentOffset = TimeSpan.Zero;
+    private bool _isModified = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SyncDataAsync();
+        _targetTime = _virtualTime;
+
+        _timer = new Timer(async _ =>
+        {
+            _realTime = DateTime.Now;
+            _virtualTime = _realTime.Add(_currentOffset);
+            await InvokeAsync(StateHasChanged);
+        }, null, 0, 1000);
+    }
+
+    private async Task SyncDataAsync()
+    {
+        // 서버에서 현재 적용된 Offset(Ticks)을 가져옴
+        long offsetTicks = await _gameClient.getServerTimeOffsetAsync();
+        _currentOffset = TimeSpan.FromTicks(offsetTicks);
+        _isModified = offsetTicks != 0;
+
+        _realTime = DateTime.Now;
+        _virtualTime = _realTime.Add(_currentOffset);
+    }
+
+    private async Task UpdateServerTime()
+    {
+        TimeSpan offset = _targetTime - DateTime.Now;
+        var result = await _gameClient.setServerTimeOffsetAsync(offset.Ticks);
+
+        if (result.Item1) {
+            await JS.InvokeVoidAsync("alert", "변경 완료.");
+            await SyncDataAsync();
+        }
+        else {
+            await JS.InvokeVoidAsync("alert", "변경 실패.");
+        }
+    }
+
+    private async Task ResetServerTime()
+    {
+        var result = await _gameClient.setServerTimeOffsetAsync(0);
+        if (result.Item1)
+        {
+            _targetTime = DateTime.Now;
+            await SyncDataAsync();
+            await JS.InvokeVoidAsync("alert", "현실 시간으로 초기화되었습니다.");
+        }
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

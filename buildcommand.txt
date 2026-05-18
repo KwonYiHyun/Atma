@@ -1,0 +1,19 @@
+cd Empen
+dotnet publish -c Release -o ../publish/Empen
+
+cd LoginServer
+dotnet publish -c Release -o ../publish/LoginServer
+
+
+
+CREATE TABLE person (
+    person_id INT IDENTITY(1,1) PRIMARY KEY,
+    display_person_id INT NOT NULL UNIQUE,
+    login_provider NVARCHAR(50) NOT NULL,
+    person_hash NVARCHAR(255) NOT NULL,
+    email NVARCHAR(255),
+    insert_date DATETIME DEFAULT GETDATE(),
+    update_date DATETIME DEFAULT GETDATE()
+);
+
+ALTER TABLE person ADD CONSTRAINT UQ_DisplayPersonId UNIQUE (display_person_id);

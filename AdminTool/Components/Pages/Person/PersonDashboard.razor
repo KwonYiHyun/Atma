@@ -1,0 +1,85 @@
+﻿@page "/person"
+
+<style>
+    .menu-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+        .menu-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+    .list-group-item-action {
+        font-weight: 500;
+        color: #495057;
+    }
+
+        .list-group-item-action:hover {
+            background-color: #f8f9fa;
+            color: #198754;
+        }
+</style>
+
+<div class="container-fluid mt-3">
+    <h3 class="mb-4"><span class="oi oi-people text-success"></span> 사용자 데이터(Person) 관리</h3>
+    <p class="text-muted mb-4">
+        특정 유저의 정보를 조회하고 데이터를 수정/회수할 수 있는 메뉴입니다.
+        <strong class="text-danger">(※ 실제 라이브 서비스 데이터이므로 수정 및 삭제 시 주의 바랍니다.)</strong>
+    </p>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+
+        <div class="col">
+            <div class="card h-100 border-success menu-card">
+                <div class="card-header bg-success text-white fw-bold">
+                    <span class="oi oi-person"></span> 유저 기본 정보
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="person/status" class="list-group-item list-group-item-action">
+                        유저 상세 및 재화 관리
+                    </a>
+                    <a href="person/login" class="list-group-item list-group-item-action text-muted">
+                        유저 로그인 기록 관리 (개발 예정)
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card h-100 border-info menu-card">
+                <div class="card-header bg-info text-white fw-bold">
+                    <span class="oi oi-briefcase"></span> 인벤토리 & 보상
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="person/item" class="list-group-item list-group-item-action">
+                        유저 아이템 관리
+                    </a>
+                    <a href="person/item_history" class="list-group-item list-group-item-action">
+                        유저 아이템 획득 관리
+                    </a>
+                    <a href="person/mail" class="list-group-item list-group-item-action">
+                        유저 우편함 관리
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card h-100 border-warning menu-card">
+                <div class="card-header bg-warning text-dark fw-bold">
+                    <span class="oi oi-cart"></span> BM & 결제 기록
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="person/gacha" class="list-group-item list-group-item-action">
+                        유저 가챠 기록 관리
+                    </a>
+                    <a href="person/purchase" class="list-group-item list-group-item-action text-muted">
+                        유저 구매 기록 관리 (개발 예정)
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>

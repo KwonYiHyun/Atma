@@ -1,0 +1,53 @@
+﻿@page "/admin/maintenance"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@inject GameServerClient _gameClient
+@inject IJSRuntime JS
+
+<h3>🚧 게임 서버 점검 관리</h3>
+
+<div class="card mt-4" style="max-width: 600px;">
+    <div class="card-body text-center py-5">
+        @if (isMaintenance)
+        {
+            <h1 class="text-danger mb-4">⛔ 현재 서버 점검 중입니다</h1>
+            <p>일반 유저의 로그인이 차단되며, 인게임 API 호출이 거부됩니다.</p>
+            <button class="btn btn-success btn-lg mt-3" @onclick="ToggleMaintenance">
+                점검 종료 (서버 오픈)
+            </button>
+        }
+        else
+        {
+            <h1 class="text-success mb-4">✅ 서버 정상 서비스 중</h1>
+            <p>모든 유저가 정상적으로 게임을 이용할 수 있습니다.</p>
+            <button class="btn btn-danger btn-lg mt-3" @onclick="ToggleMaintenance">
+                점검 시작 (접속 차단)
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private bool isMaintenance = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isMaintenance = await _gameClient.getMaintenanceStatusAsync();
+    }
+
+    private async Task ToggleMaintenance()
+    {
+        string action = isMaintenance ? "종료(오픈)" : "시작(차단)";
+        if (await JS.InvokeAsync<bool>("confirm", $"정말 점검을 {action}하시겠습니까?"))
+        {
+            var result = await _gameClient.setMaintenanceStatusAsync(!isMaintenance);
+            if (result.Item1)
+            {
+                isMaintenance = !isMaintenance;
+                StateHasChanged();
+            }
+        }
+    }
+}

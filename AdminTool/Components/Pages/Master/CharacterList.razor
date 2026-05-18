@@ -1,0 +1,373 @@
+﻿@page "/master/characters"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@using SharedData.Dto.Admin
+
+@inject GameServerClient _gameClient
+@inject IJSRuntime JS
+
+<style>
+    .table-scroll-container {
+        height: calc(100vh - 250px);
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+    }
+
+        .table-scroll-container thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+    .fab-btn {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        font-size: 30px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding-bottom: 5px;
+    }
+</style>
+
+<h3>캐릭터 마스터 관리</h3>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <input type="text" class="form-control" placeholder="ID 또는 이름 검색"
+                   @bind="searchText" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <button class="btn btn-primary" @onclick="SearchCharacters">검색</button>
+            <button class="btn btn-secondary" @onclick="ResetSearch">초기화</button>
+        </div>
+    </div>
+</div>
+
+@if (characterList == null)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="table-scroll-container bg-white">
+        <table class="table table-striped table-hover align-middle mb-0">
+            <thead class="table-dark sticky-top">
+                <tr>
+                    <th style="width: 80px;">ID</th>
+                    <th style="width: 80px;">순서</th>
+                    <th>이름</th>
+                    <th>등급(초기/최대)</th>
+                    <th>최대 레벨</th>
+                    <th>조각 아이템 ID</th>
+                    <th>기간</th>
+                    <th style="width: 100px;">관리</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var character in characterList)
+                {
+                    <tr>
+                        <td>@character.character_id</td>
+                        <td>@character.show_order</td>
+                        <td class="fw-bold">@character.character_name</td>
+                        <td>
+                            @character.character_grade <span class="text-muted">/ @character.character_grade_max</span>
+                        </td>
+                        <td>Lv.@character.character_level_max</td>
+                        <td>@character.piece_item_id</td>
+                        <td>
+                            <small>
+                                @character.start_date.ToString("yy-MM-dd") <br />
+                                @(character.end_date.HasValue? character.end_date.Value.ToString("yy-MM-dd") : "무기한")
+                            </small>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info text-white" @onclick="() => OpenEditModal(character)">
+                                상세
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<button class="btn btn-primary fab-btn" @onclick="OpenAddModal" title="신규 캐릭터 추가"> + </button>
+
+@if (showModal && editingCharacter != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @(isNew ? "신규 캐릭터 등록" : $"캐릭터 수정 ({editingCharacter.character_id})")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">기본 정보</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">ID (PK)</label>
+                            <input type="number" class="form-control" @bind="editingCharacter.character_id" disabled="@(!isNew)" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">표시 순서</label>
+                            <input type="number" class="form-control" @bind="editingCharacter.show_order" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">캐릭터 이름</label>
+                            <input type="text" class="form-control" @bind="editingCharacter.character_name" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">설명</label>
+                            <textarea class="form-control" rows="2" @bind="editingCharacter.character_description"></textarea>
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">스탯 및 성장</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label class="form-label">초기 등급 (Grade)</label>
+                            <input type="number" class="form-control" @bind="editingCharacter.character_grade" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">최대 등급 (Max Grade)</label>
+                            <input type="number" class="form-control" @bind="editingCharacter.character_grade_max" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">최대 레벨 (Max Level)</label>
+                            <input type="number" class="form-control" @bind="editingCharacter.character_level_max" />
+                        </div>
+                        <div class="col-md-3 d-none d-md-block"></div> <div class="col-md-3">
+                            <label class="form-label">치명타 확률 (Crit Rate)</label>
+                            <input type="number" class="form-control" @bind="editingCharacter.character_critical_rate" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">치명타 피해 (Crit Dmg)</label>
+                            <input type="number" class="form-control" @bind="editingCharacter.character_critical_damage" />
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">관련 아이템</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">캐릭터 조각 아이템 ID</label>
+                            <input type="number" class="form-control" @bind="editingCharacter.piece_item_id" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">중복 획득 시 조각 지급량</label>
+                            <input type="number" class="form-control" @bind="editingCharacter.piece_amount_duplicate" />
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">대사 및 연출</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">코멘트 1</label>
+                            <input type="text" class="form-control" @bind="editingCharacter.character_comment_1" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">모션 1</label>
+                            <input type="text" class="form-control" @bind="editingCharacter.character_comment_1_motion" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">코멘트 2</label>
+                            <input type="text" class="form-control" @bind="editingCharacter.character_comment_2" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">모션 2</label>
+                            <input type="text" class="form-control" @bind="editingCharacter.character_comment_2_motion" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">코멘트 3</label>
+                            <input type="text" class="form-control" @bind="editingCharacter.character_comment_3" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">모션 3</label>
+                            <input type="text" class="form-control" @bind="editingCharacter.character_comment_3_motion" />
+                        </div>
+                    </div>
+
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">판매 및 유효 기간</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">시작일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingCharacter.start_date" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">종료일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingCharacter.end_date" />
+                            <div class="form-text">비워두면 무기한</div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">취소</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveCharacter">
+                        @(isNew ? "신규 등록" : "수정 저장")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MasterCharacterDto> characterList;
+    private string searchText = "";
+
+    private bool showModal = false;
+    private bool isNew = false;
+    private MasterCharacterDto editingCharacter;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        characterList = await _gameClient.getCharacters();
+        if (!string.IsNullOrEmpty(searchText))
+        {
+            await SearchCharacters();
+        }
+    }
+
+    private async Task SearchCharacters()
+    {
+        if (characterList == null || characterList.Count == 0) await LoadData();
+
+        var query = characterList.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            if (int.TryParse(searchText, out int searchId))
+            {
+                query = query.Where(c => c.character_id == searchId);
+            }
+            else
+            {
+                query = query.Where(c => c.character_name.Contains(searchText));
+            }
+        }
+
+        characterList = query.OrderBy(c => c.character_id).ToList();
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchCharacters();
+    }
+
+    private async Task ResetSearch()
+    {
+        searchText = "";
+        await LoadData();
+    }
+
+    private void OpenAddModal()
+    {
+        isNew = true;
+        editingCharacter = new MasterCharacterDto
+        {
+            character_id = 0,
+            show_order = 1,
+            character_level_max = 60,
+            character_grade = 3,
+            character_grade_max = 5,
+            start_date = DateTime.Now,
+            end_date = null,
+            insert_date = DateTime.Now,
+            update_date = DateTime.Now
+        };
+        showModal = true;
+    }
+
+    private void OpenEditModal(MasterCharacterDto item)
+    {
+        isNew = false;
+        editingCharacter = new MasterCharacterDto
+        {
+            character_id = item.character_id,
+            show_order = item.show_order,
+            character_name = item.character_name,
+            character_level_max = item.character_level_max,
+            character_grade_max = item.character_grade_max,
+            character_grade = item.character_grade,
+            character_critical_rate = item.character_critical_rate,
+            character_critical_damage = item.character_critical_damage,
+            piece_item_id = item.piece_item_id,
+            piece_amount_duplicate = item.piece_amount_duplicate,
+            character_description = item.character_description,
+            character_comment_1 = item.character_comment_1,
+            character_comment_2 = item.character_comment_2,
+            character_comment_3 = item.character_comment_3,
+            character_comment_1_motion = item.character_comment_1_motion,
+            character_comment_2_motion = item.character_comment_2_motion,
+            character_comment_3_motion = item.character_comment_3_motion,
+            start_date = item.start_date,
+            end_date = item.end_date,
+            insert_date = item.insert_date,
+            update_date = item.update_date
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingCharacter = null;
+    }
+
+    private async Task SaveCharacter()
+    {
+        try
+        {
+            (bool success, string message) result;
+
+            if (isNew)
+            {
+                result = await _gameClient.addCharacterAsync(editingCharacter);
+            }
+            else
+            {
+                result = await _gameClient.editCharacterAsync(editingCharacter);
+            }
+
+            if (result.success)
+            {
+                await JS.InvokeVoidAsync("alert", result.message);
+                CloseModal();
+                await LoadData();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", $"저장 실패: {result.message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"오류 발생: {ex.Message}");
+        }
+    }
+}

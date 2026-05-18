@@ -1,0 +1,125 @@
+﻿@page "/person/item_history"
+@page "/person/item_history/{TargetPersonId:int}"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@using SharedData.Dto
+@using SharedData.Dto.Admin
+
+@inject GameServerClient Client
+
+<h3>📜 유저 아이템 획득/소모 로그</h3>
+
+<div class="row mb-3 align-items-end">
+    <div class="col-auto">
+        <label class="form-label">유저 ID (Person ID)</label>
+        <div class="input-group" style="max-width: 300px;">
+            <input type="number" class="form-control" @bind="SearchPersonId" @bind:event="oninput" @onkeyup="HandleKeyUp" placeholder="유저 ID 입력..." />
+            <button class="btn btn-primary" @onclick="SearchHistory">검색</button>
+        </div>
+    </div>
+</div>
+
+@if (IsLoading)
+{
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">데이터를 불러오는 중입니다...</span>
+    </div>
+}
+else if (HistoryList != null)
+{
+    if (HistoryList.Count == 0)
+    {
+        <div class="alert alert-info">해당 유저의 아이템 이력이 존재하지 않습니다.</div>
+    }
+    else
+    {
+        <table class="table table-striped table-hover table-bordered align-middle">
+            <thead class="table-dark text-center">
+                <tr>
+                    <th>로그 ID</th>
+                    <th>유저 ID</th>
+                    <th>아이템 ID</th>
+                    <th>변동 수량</th>
+                    <th>발생 일시</th>
+                </tr>
+            </thead>
+            <tbody class="text-center">
+                @foreach (var history in HistoryList)
+                {
+                    <tr>
+                        <td>@history.person_item_history_id</td>
+                        <td>@history.person_id</td>
+                        <td>
+                            <span class="badge bg-secondary">@history.item_id</span>
+                        </td>
+                        <td>
+                            @if (history.amount > 0)
+                            {
+                                <span class="text-success fw-bold">+@history.amount</span>
+                            }
+                            else if (history.amount < 0)
+                            {
+                                <span class="text-danger fw-bold">@history.amount</span>
+                            }
+                            else
+                            {
+                                @history.amount
+                            }
+                        </td>
+                        <td>@history.insert_date.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [Parameter]
+    public int? TargetPersonId { get; set; }
+
+    private int SearchPersonId { get; set; }
+    private List<PersonItemHistoryDto>? HistoryList;
+    private bool IsLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (TargetPersonId.HasValue)
+        {
+            SearchPersonId = TargetPersonId.Value;
+            await SearchHistory();
+        }
+    }
+
+    private async Task SearchHistory()
+    {
+        if (SearchPersonId <= 0) return;
+
+        IsLoading = true;
+        HistoryList = null;
+
+        try
+        {
+            var result = await Client.getPersonItemHistorysAsync(SearchPersonId);
+
+            if (result != null)
+            {
+                HistoryList = result.OrderByDescending(h => h.insert_date).ToList();
+            }
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchHistory();
+        }
+    }
+}

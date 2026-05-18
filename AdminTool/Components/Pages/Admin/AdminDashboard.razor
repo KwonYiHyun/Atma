@@ -1,0 +1,82 @@
+﻿@page "/admin"
+
+<style>
+    .menu-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+        .menu-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+    .list-group-item-action {
+        font-weight: 500;
+        color: #495057;
+    }
+
+        .list-group-item-action:hover {
+            background-color: #f8f9fa;
+            color: #dc3545;
+        }
+</style>
+
+<div class="container-fluid mt-3">
+    <h3 class="mb-4"><span class="oi oi-wrench text-danger"></span> 운영자 기능(Admin) 관리</h3>
+    <p class="text-muted mb-4">
+        서버 전체 시스템을 제어하고 대규모 운영 작업을 수행하는 공간입니다.
+        <strong class="text-danger">(※ 모든 유저와 게임 서버 전체에 즉각적인 영향을 미치므로 각별한 주의가 필요합니다.)</strong>
+    </p>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+
+        <div class="col">
+            <div class="card h-100 border-danger menu-card">
+                <div class="card-header bg-danger text-white fw-bold">
+                    <span class="oi oi-power-standby"></span> 시스템 제어 (System Control)
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="admin/maintenance" class="list-group-item list-group-item-action">
+                        <span class="oi oi-warning me-2"></span> 게임 서버 점검 관리
+                    </a>
+                    <a href="admin/server-time" class="list-group-item list-group-item-action">
+                        <span class="oi oi-clock me-2"></span> 서버 시간(가상 시간) 조정
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card h-100 border-primary menu-card">
+                <div class="card-header bg-primary text-white fw-bold">
+                    <span class="oi oi-loop-circular"></span> 데이터 관리 (Data Management)
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="admin/cache/manage" class="list-group-item list-group-item-action">
+                        <span class="oi oi-flash me-2"></span> 게임 서버 캐시 초기화
+                    </a>
+                    <a href="admin/cache/stats" class="list-group-item list-group-item-action text-muted">
+                        <span class="oi oi-bar-chart me-2"></span> 캐시 사용 통계 (개발 예정)
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card h-100 border-warning menu-card">
+                <div class="card-header bg-warning text-dark fw-bold">
+                    <span class="oi oi-envelope-closed"></span> 대규모 운영 (Operations)
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="admin/mail/send" class="list-group-item list-group-item-action">
+                        <span class="oi oi-gift me-2"></span> 전체/단일 보상 우편 발송
+                    </a>
+                    <a href="admin/dummy" class="list-group-item list-group-item-action text-muted">
+                        <span class="oi oi-beaker me-2"></span> 더미 데이터 생성 (개발 예정)
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>

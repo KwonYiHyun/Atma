@@ -1,0 +1,189 @@
+﻿@page "/person/status"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@using SharedData.Dto.Admin
+
+@inject GameServerClient _gameClient
+@inject IJSRuntime JS
+
+<style>
+    .profile-card {
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .stat-box {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+    }
+
+    .stat-label {
+        font-size: 0.85rem;
+        color: #6c757d;
+        font-weight: bold;
+    }
+
+    .stat-value {
+        font-size: 1.25rem;
+        font-weight: bold;
+        color: #0d6efd;
+    }
+</style>
+
+<h3>유저 상세 정보 (Person Status)</h3>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="input-group">
+            <span class="input-group-text bg-light fw-bold">Person ID</span>
+            <input type="number" class="form-control" placeholder="조회할 유저 ID 입력"
+                   @bind="searchPersonId" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <button class="btn btn-primary" @onclick="SearchStatus">조회</button>
+        </div>
+    </div>
+</div>
+
+@if (status == null)
+{
+    <div class="alert alert-info">유저 ID를 입력하고 조회 버튼을 눌러주세요.</div>
+}
+else
+{
+    <div class="card profile-card mb-4">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">@status.person_name (ID: @status.person_id)</h5>
+            <button class="btn btn-sm btn-outline-light" @onclick="OpenEditModal">정보 수정</button>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 mb-3">
+                <div class="col-md-3"><div class="stat-box"><div class="stat-label">레벨 (Level)</div><div class="stat-value">@status.level</div></div></div>
+                <div class="col-md-3"><div class="stat-box"><div class="stat-label">경험치 (Exp)</div><div class="stat-value text-dark">@status.exp</div></div></div>
+                <div class="col-md-3"><div class="stat-box"><div class="stat-label">프리즘 (Prism)</div><div class="stat-value text-primary">💎 @status.prism.ToString("N0")</div></div></div>
+                <div class="col-md-3"><div class="stat-box"><div class="stat-label">토큰 (Token)</div><div class="stat-value text-warning">🪙 @status.token.ToString("N0")</div></div></div>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-3"><div class="stat-box"><div class="stat-label">기프트 (Gift)</div><div class="stat-value text-success">🎁 @status.gift.ToString("N0")</div></div></div>
+                <div class="col-md-3"><div class="stat-box"><div class="stat-label">매뉴얼 (Manual)</div><div class="stat-value text-info">📖 @status.manual.ToString("N0")</div></div></div>
+                <div class="col-md-3"><div class="stat-box"><div class="stat-label">필름 (Film)</div><div class="stat-value text-secondary">🎞️ @status.flim.ToString("N0")</div></div></div>
+                <div class="col-md-3"><div class="stat-box"><div class="stat-label">해시 (Hash)</div><div style="font-size:0.9rem;" class="text-truncate">@status.person_hash</div></div></div>
+            </div>
+            <hr />
+            <div class="row">
+                <div class="col-md-6"><strong>이메일:</strong> @status.email</div>
+                <div class="col-md-6"><strong>자기소개:</strong> @status.introduce</div>
+                <div class="col-md-6 mt-2"><strong>최근 접속일:</strong> @status.update_date.ToString("yyyy-MM-dd HH:mm:ss")</div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showModal && editingStatus != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">유저 정보 수정 (@editingStatus.person_id)</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">닉네임</label><input type="text" class="form-control" @bind="editingStatus.person_name" /></div>
+                        <div class="col-md-3"><label class="form-label">레벨</label><input type="number" class="form-control" @bind="editingStatus.level" /></div>
+                        <div class="col-md-3"><label class="form-label">경험치</label><input type="number" class="form-control" @bind="editingStatus.exp" /></div>
+
+                        <div class="col-md-3"><label class="form-label text-primary fw-bold">프리즘</label><input type="number" class="form-control" @bind="editingStatus.prism" /></div>
+                        <div class="col-md-3"><label class="form-label text-warning fw-bold">토큰</label><input type="number" class="form-control" @bind="editingStatus.token" /></div>
+                        <div class="col-md-3"><label class="form-label text-success fw-bold">기프트</label><input type="number" class="form-control" @bind="editingStatus.gift" /></div>
+                        <div class="col-md-3"><label class="form-label text-info fw-bold">매뉴얼</label><input type="number" class="form-control" @bind="editingStatus.manual" /></div>
+
+                        <div class="col-md-3"><label class="form-label text-secondary fw-bold">필름</label><input type="number" class="form-control" @bind="editingStatus.flim" /></div>
+                        <div class="col-12"><label class="form-label">자기소개</label><input type="text" class="form-control" @bind="editingStatus.introduce" /></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">취소</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveStatus">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int? searchPersonId;
+    private PersonStatusDto? status;
+    private bool showModal = false;
+    private PersonStatusDto? editingStatus;
+
+    private async Task SearchStatus()
+    {
+        if (searchPersonId == null || searchPersonId <= 0)
+        {
+            await JS.InvokeVoidAsync("alert", "유효한 ID를 입력하세요.");
+            return;
+        }
+        status = await _gameClient.getPersonStatusAsync(searchPersonId.Value);
+        if (status == null)
+        {
+            await JS.InvokeVoidAsync("alert", "유저를 찾을 수 없습니다.");
+        }
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e) {
+        if (e.Key == "Enter") await SearchStatus();
+    }
+
+    private void OpenEditModal()
+    {
+        if (status == null) return;
+        editingStatus = new PersonStatusDto
+        {
+            person_status_id = status.person_status_id,
+            person_id = status.person_id,
+            person_hash = status.person_hash,
+            email = status.email,
+            person_name = status.person_name,
+            level = status.level,
+            exp = status.exp,
+            prism = status.prism,
+            token = status.token,
+            gift = status.gift,
+            manual = status.manual,
+            flim = status.flim,
+            introduce = status.introduce
+        };
+        showModal = true;
+    }
+    private void CloseModal() { showModal = false; editingStatus = null; }
+
+    private async Task SaveStatus()
+    {
+        if (editingStatus == null) return;
+        var result = await _gameClient.editPersonStatusAsync(editingStatus);
+        if (result.Item1)
+        {
+            await JS.InvokeVoidAsync("alert", "저장되었습니다.");
+            CloseModal();
+            await SearchStatus();
+
+            // var cacheResult = await _gameClient.deletePersonStatusCacheAsync(searchPersonId.Value);
+            // if (cacheResult)
+            // {
+            //     //await JS.InvokeVoidAsync("alert", "캐시초기화 성공.");
+            // }
+            // else
+            // {
+            //     await JS.InvokeVoidAsync("alert", "캐시초기화 실패.");
+            // }
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", $"실패: {result.Item2}");
+        }
+    }
+}

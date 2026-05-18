@@ -1,0 +1,133 @@
+﻿@page
+@model Empen.Pages.Notice.IndexModel
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>공지사항</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .notice-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .notice-item {
+            border-bottom: 1px solid #2c2c2c;
+        }
+
+        .notice-link {
+            display: flex;
+            padding: 15px;
+            text-decoration: none;
+            color: inherit;
+            align-items: center;
+        }
+
+            .notice-link:active {
+                background-color: #252525;
+            }
+
+        /* 썸네일 이미지 (있을 경우) */
+        .thumb {
+            width: 80px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-right: 15px;
+            background-color: #333;
+        }
+
+        .info {
+            flex-grow: 1;
+        }
+
+        .badge {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            display: inline-block;
+        }
+
+        .badge-0 {
+            background-color: #3b82f6;
+            color: white;
+        }
+        /* 일반 */
+        .badge-1 {
+            background-color: #ef4444;
+            color: white;
+        }
+        /* 긴급/점검 */
+        .badge-2 {
+            background-color: #f59e0b;
+            color: black;
+        }
+        /* 이벤트 */
+
+        .title {
+            display: block;
+            font-size: 15px;
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+
+        .date {
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    @if (Model.NoticeList.Count == 0)
+    {
+        <div style="text-align:center; padding:50px; color:#666;">등록된 공지사항이 없습니다.</div>
+    }
+    else
+    {
+        <ul class="notice-list">
+            @foreach (var item in Model.NoticeList)
+            {
+                <li class="notice-item">
+                    <a href="/Notice/Read?id=@item.notice_id" class="notice-link">
+                        @if (!string.IsNullOrEmpty(item.notice_banner_image))
+                        {
+                            <img src="@item.notice_banner_image" class="thumb" alt="" />
+                        }
+
+                        <div class="info">
+                            @{
+                                string typeName = "공지";
+                                string badgeClass = "badge-0";
+                                switch (item.notice_type)
+                                {
+                                    case 1: typeName = "점검"; badgeClass = "badge-1"; break;
+                                    case 2: typeName = "이벤트"; badgeClass = "badge-2"; break;
+                                }
+                            }
+                            <span class="badge @badgeClass">@typeName</span>
+                            <span class="title">@item.notice_title</span>
+                            <span class="date">@item.start_date.ToString("yyyy.MM.dd")</span>
+                        </div>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+</body>
+</html>

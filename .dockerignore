@@ -1,0 +1,7 @@
+# .dockerignore
+**/.vs
+**/.git
+**/bin
+**/obj
+**/TestResults
+node_modules

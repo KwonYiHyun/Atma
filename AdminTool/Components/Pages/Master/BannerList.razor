@@ -1,0 +1,342 @@
+﻿@page "/master/banners"
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@using AdminTool.API
+@using SharedData.Dto.Admin
+@using SharedData.Type
+
+@inject GameServerClient _gameClient
+@inject IJSRuntime JS
+
+<style>
+    .table-scroll-container {
+        height: calc(100vh - 250px);
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+    }
+    .table-scroll-container thead th {
+        position: sticky; top: 0; z-index: 1;
+    }
+    .fab-btn {
+        position: fixed; bottom: 30px; right: 30px;
+        width: 60px; height: 60px; border-radius: 50%;
+        font-size: 30px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        z-index: 1000; display: flex; align-items: center; justify-content: center; padding-bottom: 5px;
+    }
+    .banner-preview {
+        max-width: 100px; max-height: 50px; object-fit: contain; border: 1px solid #ddd; background-color: #f8f9fa;
+    }
+</style>
+
+<h3>배너 마스터 관리</h3>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <input type="text" class="form-control" placeholder="ID 또는 이미지 경로 검색"
+                   @bind="searchText" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <button class="btn btn-primary" @onclick="SearchBanners">검색</button>
+            <button class="btn btn-secondary" @onclick="ResetSearch">초기화</button>
+        </div>
+    </div>
+</div>
+
+@if (bannerList == null)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="table-scroll-container bg-white">
+        <table class="table table-striped table-hover align-middle mb-0">
+            <thead class="table-dark sticky-top">
+                <tr>
+                    <th style="width: 60px;">ID</th>
+                    <th style="width: 60px;">순서</th>
+                    <th>노출 위치</th>
+                    <th>이미지</th>
+                    <th>액션</th>
+                    <th>OS</th>
+                    <th>기간</th>
+                    <th style="width: 80px;">관리</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var banner in bannerList)
+                {
+                    <tr>
+                        <td>@banner.banner_id</td>
+                        <td>@banner.show_order</td>
+                        <td>
+                            @if (banner.show_place_type == 1) { <span class="badge bg-primary">로비</span> }
+                            else if (banner.show_place_type == 2) { <span class="badge bg-success">상점</span> }
+                            else { <span class="badge bg-secondary">기타(@banner.show_place_type)</span> }
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(banner.banner_image))
+                            {
+                                <img src="@banner.banner_image" class="banner-preview" alt="img" 
+                                     onerror="this.style.display='none'" />
+                                <div class="text-truncate" style="font-size:0.75rem; max-width: 150px;">
+                                    @banner.banner_image
+                                </div>
+                            }
+                        </td>
+                        <td>
+                            <small>
+                                타입: @banner.banner_action_type <br/>
+                                파라미터: @banner.banner_action_param
+                            </small>
+                        </td>
+                        <td>
+                            @switch (banner.os_type)
+                            {
+                                case 0: <span class="badge bg-info text-dark">All</span> break;
+                                case 1: <span class="badge bg-secondary">iOS</span> break;
+                                case 2: <span class="badge bg-success">Android</span> break;
+                                default: <span>@banner.os_type</span> break;
+                            }
+                        </td>
+                        <td>
+                            <small>
+                                @banner.start_date.ToString("yy-MM-dd HH:mm") <br />
+                                @(banner.end_date.HasValue ? banner.end_date.Value.ToString("yy-MM-dd HH:mm") : "무기한")
+                            </small>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info text-white" @onclick="() => OpenEditModal(banner)">
+                                상세
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<button class="btn btn-primary fab-btn" @onclick="OpenAddModal" title="신규 배너 추가"> + </button>
+
+@if (showModal && editingBanner != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        @(isNew ? "신규 배너 등록" : $"배너 수정 ({editingBanner.banner_id})")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">ID (PK)</label>
+                            <input type="number" class="form-control" @bind="editingBanner.banner_id" disabled="@(!isNew)" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">표시 순서</label>
+                            <input type="number" class="form-control" @bind="editingBanner.show_order" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">노출 위치 (Type)</label>
+                            <input type="number" class="form-control" @bind="editingBanner.show_place_type" />
+                            <div class="form-text">1:로비, 2:상점 등</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">OS 타입</label>
+                            <select class="form-select" @bind="editingBanner.os_type">
+                                <option value="0">전체 (All)</option>
+                                <option value="1">iOS</option>
+                                <option value="2">Android</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">이미지 경로 (URL/Resource)</label>
+                            <input type="text" class="form-control" @bind="editingBanner.banner_image" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">액션 타입</label>
+                            <input type="number" class="form-control" @bind="editingBanner.banner_action_type" />
+                            <div class="form-text">0:없음, 1:링크, 2:인게임이동</div>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">액션 파라미터</label>
+                            <input type="text" class="form-control" @bind="editingBanner.banner_action_param" placeholder="URL 또는 이동할 메뉴 ID" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">노출 제한 타입</label>
+                            <input type="number" class="form-control" @bind="editingBanner.limited_type" />
+                            <div class="form-text">0:없음, 1:레벨제한 등</div>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">노출 제한 파라미터</label>
+                            <input type="number" class="form-control" @bind="editingBanner.limited_param" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">시작일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingBanner.start_date" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">종료일</label>
+                            <input type="datetime-local" class="form-control" @bind="editingBanner.end_date" />
+                            <div class="form-text">비워두면 무기한</div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">취소</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveBanner">
+                        @(isNew ? "신규 등록" : "수정 저장")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MasterBannerDto> bannerList;
+    private string searchText = "";
+
+    private bool showModal = false;
+    private bool isNew = false;
+    private MasterBannerDto editingBanner;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        bannerList = await _gameClient.getBanners();
+        if (!string.IsNullOrEmpty(searchText))
+        {
+            await SearchBanners();
+        }
+    }
+
+    private async Task SearchBanners()
+    {
+        if (bannerList == null || bannerList.Count == 0) await LoadData();
+
+        var query = bannerList.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            if (int.TryParse(searchText, out int searchId))
+            {
+                query = query.Where(b => b.banner_id == searchId);
+            }
+            else
+            {
+                query = query.Where(b => b.banner_image != null && b.banner_image.Contains(searchText));
+            }
+        }
+
+        bannerList = query
+            .OrderByDescending(b => b.start_date)
+            .ThenBy(b => b.show_order)
+            .ToList();
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchBanners();
+    }
+
+    private async Task ResetSearch()
+    {
+        searchText = "";
+        await LoadData();
+    }
+
+    private void OpenAddModal()
+    {
+        isNew = true;
+        editingBanner = new MasterBannerDto
+        {
+            banner_id = 0,
+            show_order = 1,
+            show_place_type = 1,
+            os_type = 0,
+            start_date = DateTime.Now,
+            end_date = DateTime.Now.AddDays(7),
+            insert_date = DateTime.Now,
+            update_date = DateTime.Now
+        };
+        showModal = true;
+    }
+
+    private void OpenEditModal(MasterBannerDto item)
+    {
+        isNew = false;
+        editingBanner = new MasterBannerDto
+        {
+            banner_id = item.banner_id,
+            show_order = item.show_order,
+            show_place_type = item.show_place_type,
+            banner_image = item.banner_image,
+            banner_action_type = item.banner_action_type,
+            banner_action_param = item.banner_action_param,
+            limited_type = item.limited_type,
+            limited_param = item.limited_param,
+            os_type = item.os_type,
+            start_date = item.start_date,
+            end_date = item.end_date,
+            insert_date = item.insert_date,
+            update_date = item.update_date
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingBanner = null;
+    }
+
+    private async Task SaveBanner()
+    {
+        try
+        {
+            (bool success, string message) result;
+
+            if (isNew)
+            {
+                result = await _gameClient.addBannerAsync(editingBanner);
+            }
+            else
+            {
+                result = await _gameClient.editBannerAsync(editingBanner);
+            }
+
+            if (result.success)
+            {
+                await JS.InvokeVoidAsync("alert", result.message);
+                CloseModal();
+                await LoadData();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", $"저장 실패: {result.message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"오류 발생: {ex.Message}");
+        }
+    }
+}
