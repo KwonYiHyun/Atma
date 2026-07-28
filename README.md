@@ -1,6 +1,6 @@
 # Atma (수집형 RPG)
 
-**Project Atma**는 수집형 RPG 장르의 기본적인 콘텐츠를 구현한 중심 프로젝트입니다.
+**Project Atma**는 수집형 RPG 장르의 Outgame 콘텐츠를 구현한 프로젝트입니다.
 
 ---
 
